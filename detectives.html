@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<meta charset="utf-8">
+	</head>
+	<body>
+		<div class="wrap">
+			<select id="sel_numPlayers">
+				<option value="2">2</option>
+				<option value="3">3</option>
+				<option value="4">4</option>
+				<option value="5">5</option>
+				<option value="6">6</option>
+			</select>
+			<button onclick="newGame()">New Game</button>
+		</div>
+		<div class="wrap">
+			<div id="div_events">
+			</div>
+			<button onclick="addEvent()">Add Event</button>
+		</div>
+		<div class="wrap">
+			<div id="div_facts">
+			</div>
+			<button onclick="addFact()">Add Fact</button>
+		</div>
+		<div id="res_table">
+
+		</div>
+	</body>
+
+<script>
+	bcards = {
+		people : ["Scarlet","White","Mustard"],
+		weapons : ["Rope", "Dagger", "Lead Pipe"],
+		rooms : ["Ball Room", "Hall", "Study"]
+	}
+
+	theGame = null;
+
+	function makeSelect(id,values){
+		var sel = document.createElement("select");
+		sel.setAttribute("id",id);
+		for (var i = 0; i < values.length; i++){
+			var op = document.createElement("option");
+			op.innerHTML=values[i];
+			op.setAttribute("value",values[i]);
+			sel.appendChild(op);
+		}
+		return sel;
+	}
+
+	function newGame(){
+		var nPlayers =parseInt( document.getElementById("sel_numPlayers").value);
+		var evArea = document.getElementById("div_events");
+		while (evArea.hasChildNodes()){
+			evArea.removeChild(evArea.lastChild);
+		}
+		theGame = { events:[],facts:[],players:[]};
+		var playas = [];
+		for (i = 0; i < nPlayers; i++){
+			theGame.players[i] = [];
+			playas[i] = i;
+
+		}
+		evArea.appendChild(makeSelect("sel_asker",playas));		
+		for ( p in bcards){
+			evArea.appendChild(makeSelect("selc_" + p,bcards[p]));
+		}
+
+		
+		evArea.appendChild(makeSelect("sel_responder",playas));		
+
+		fArea = document.getElementById("div_facts");
+		fArea.appendChild(makeSelect("sel_owner",playas));
+		allCards = []
+		for (i in bcards){
+			allCards = allCards.concat(bcards[i])
+		}
+		fArea.appendChild(makeSelect("sel_fact_card",allCards));
+
+		
+	}
+	
+	function addEvent(){
+		var asker =parseInt( document.getElementById("sel_asker").value);
+		var responder =parseInt( document.getElementById("sel_responder").value);
+		askCards = [];
+		for (p in bcards ){
+			askCards.push(document.getElementById("selc_"+p).value);
+		}
+
+		theGame.events.push({asker:asker,responder:responder,askCards:askCards});
+		calculateTable();	
+	}
+
+	function addFact(){
+		var owner = parseInt( document.getElementById("sel_owner").value);
+		var card = document.getElementById("sel_fact_card").value;
+		theGame.facts.push({owner:owner,card:card});
+		calculateTable();
+	}
+
+	function calculateEvent(ev){
+		var t = (ev.asker + 1) % theGame.players.length;
+		var hasLearned = false
+		while (t != ev.asker){
+			var cPlayer = theGame.players[t];
+			if (t == ev.responder){
+				var undef = -1;
+				for (var i = 0; i < ev.askCards.length; i++){
+					var ac = ev.askCards[i];
+					var cVal = cPlayer[ac];
+					if (cVal === true){
+						return hasLearned;
+					}
+					if (cVal === undefined){
+						if (undef != -1) return hasLearned;
+						undef = ac;
+					}
+				}
+				if (undef != -1){
+					cPlayer[undef] = true;	
+					return true;
+				}
+				return hasLearned;
+			}
+
+			//Non responder: set all to false;
+			for (p in ev.askCards)	{
+				c = ev.askCards[p];
+				if (cPlayer[c] === undefined)hasLearned = true;
+				cPlayer[c] = false;
+			}
+
+
+
+			// increment
+			t = (t+1) % theGame.players.length;
+		}
+
+		return hasLearned;
+
+	}
+
+	function calculateTable(){
+		for (var p in theGame.facts){
+			var f = theGame.facts[p];
+			theGame.players[f.owner][f.card] = true;
+		}
+
+		hasLearned = true;
+		while (hasLearned){
+			hasLearned = false;
+			for (p in theGame.events){
+				var e = theGame.events[p];
+				hasLearned = calculateEvent(e) || hasLearned;
+			}
+
+		}
+
+		drawTable();
+
+	}
+	function drawTable(){
+		rString = "";	
+		for (p in theGame.players){
+			rString += "<h2>" + p + "</h2><br>\n";	
+			pl = theGame.players[p];
+			for (q in pl)	{
+				rString += q + " : " + pl[q] + "<br>\n";
+			}
+		}
+		document.getElementById("res_table").innerHTML = rString;
+
+	
+	}
+
+</script>
+</html>
+
+<!--TODO
+Respond to Add event
+Calcalate changes
+Display a table of everthing we know
+
+Fact add system.
+
+
+
+-->
