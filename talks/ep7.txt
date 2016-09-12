@@ -1,0 +1,12 @@
+Greetings Everybody
+
+Today I want tidy up many of the little details of the current detective notes program.
+
+Here's what I want to do.
+
+First, I need to fix a minor problem with the text display when you add a card event.
+
+Then I want give the Human players real names, which might be a bit of work, but probably not impossible. This will need to be set in a new game dialog of sorts.
+
+The Next thing I want to do, is to enable Changes to the cards in the new game order.  I'd also like to be able to see how many cards each player has.
+
