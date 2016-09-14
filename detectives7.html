@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {
+                font-size : 150%;
+            }
+            div {
+                border:1px solid black;
+                margin :2px;
+            }
+            button, select{
+                height:50px;
+                font-size : 120%;
+            }
+            #dialog_1 {
+                position:fixed;
+                top:20px;
+                bottom:20px;
+                left:20px;
+                right:20px;
+                background:white;
+            }
+            .hidden {
+                display:none;
+            }
+            
+        </style>
+
+    </head>
+    <body>
+        <h1>Detective Notes</h1>
+        <div class="wrap">
+            <button onclick="newGameDialog()">New Game</button>
+        </div>
+        <div class="wrap" id="div_eventMaker">
+        </div>
+
+        <div id="res_table">
+
+        </div>
+
+        <div id="dialog_1" class="hidden">
+            Player names: (In order around the table) <br>
+            <textarea id="txt_playerNames" rows="6" cols="15"></textarea>
+            <button onclick="newGame()">Begin</button>
+        </div>
+    </body>
+
+<script>
+
+    bcardTypes = ["people"," with the ","weapons"," in the ","rooms",". Who Responds?"];
+    bcards = {
+        people : ["Scarlet","White","Mustard","Green","Plum","Peacock"],
+        weapons : ["Rope", "Dagger", "Lead Pipe","Candlestick","Revolver","Spanner"],
+        rooms : ["Ball Room", "Hall", "Study","lounge","kitchen","Conservatory","Library","Billiard Room", "Dining Room"]
+    }
+
+    theGame = null;
+
+
+    function makeOptions(message,options,values){
+        if (values === undefined) values = options;
+
+        mkArea = document.getElementById("div_eventMaker");
+    
+
+        mkArea.innerHTML = "<b>" + message + "</b><br>\n";
+        for (var i = 0; i < options.length; i++){
+            var butt = document.createElement("button");
+            butt.innerHTML = options[i];
+            butt.setAttribute("onclick","cardSelect('" + values[i] + "')");
+            mkArea.appendChild(butt);
+        }
+        
+    }
+
+    
+    function cardSelect(optionName){
+        console.log("cardSelect : " + optionName);
+        
+        if( theGame.composing === null){
+            theGame.composing = {
+                asker: parseInt(optionName),
+                askCards: []
+            }
+            makeOptions("Player " + optionName + " suspects :",bcards[bcardTypes[0]]);
+            return;
+        }
+
+        var bLen = bcardTypes.length /2;
+        var comp = theGame.composing;
+        if (comp.askCards.length === bLen){
+            comp.responder = optionName;
+            theGame.events.push(comp);
+            theGame.composing = null;
+            makeOptions("Who Suspects something?",theGame.names,theGame.playas);
+            calculateTable();
+            return;
+        }
+        var message = "Player " + comp.asker + " suspects ";
+        
+        comp.askCards.push(optionName);
+        for (var i = 0; i < comp.askCards.length; i++){
+            message += comp.askCards[i];
+            message += bcardTypes[(i * 2)+ 1];
+        }
+        if (comp.askCards.length >=bLen){
+            console.log("Last Option");
+            makeOptions(message,theGame.names,theGame.playas);
+            return;
+        }
+        console.log("Not Last: " + comp.askCards.length + "," + bcards.length);
+        var l = comp.askCards.length;
+        makeOptions(message,bcards[bcardTypes[l * 2]]);
+
+    }
+
+    function makeSelect(id,values){
+        var sel = document.createElement("select");
+        sel.setAttribute("id",id);
+        for (var i = 0; i < values.length; i++){
+            var op = document.createElement("option");
+            op.innerHTML=values[i];
+            op.setAttribute("value",values[i]);
+            sel.appendChild(op);
+        }
+        return sel;
+    }
+
+    function newGameDialog(){
+        var dialog = document.getElementById("dialog_1");
+        dialog.removeAttribute("class");
+
+
+        var pNames = document.getElementById("txt_playerNames");
+        pNames.value = "P1\nP2\np3";
+        if (theGame !== undefined)
+            pNames.value = theGame.names.join("\n");
+    }
+
+    function newGame(){
+        document.getElementById("dialog_1").setAttribute("class","hidden");
+
+        theGame = { events:[],facts:[],players:[],playas:[],composing : null};
+
+        pList = document.getElementById("txt_playerNames");
+        theGame.names = pList.value.split('\n');
+        nPlayers = theGame.names.length;
+
+
+        for (i = 0; i < nPlayers; i++){
+            theGame.players[i] = [];
+            theGame.playas[i] = i;
+
+        }
+        //Maker Area
+        makeOptions("Who suspect's something?",theGame.names,theGame.playas);
+        
+
+
+        drawTable();
+
+        
+    }
+    
+
+
+    function calculateEvent(ev){
+        var t = (ev.asker + 1) % theGame.players.length;
+        var hasLearned = false
+        while (t != ev.asker){
+            var cPlayer = theGame.players[t];
+            if (t == ev.responder){
+                var undef = -1;
+                for (var i = 0; i < ev.askCards.length; i++){
+                    var ac = ev.askCards[i];
+                    var cVal = cPlayer[ac];
+                    if (cVal > 0){
+                        return hasLearned;
+                    }
+                    if (cVal === undefined){
+                        if (undef != -1) return hasLearned;
+                        undef = ac;
+                    }
+                }
+                if (undef != -1){
+                    cPlayer[undef] = 1;  
+                    falseOthers(undef);
+                    return true;
+                }
+                return hasLearned;
+            }
+
+            //Non responder: set all to false;
+            for (p in ev.askCards)  {
+                c = ev.askCards[p];
+                if (cPlayer[c] === undefined)hasLearned = true;
+                cPlayer[c] = -1;
+            }
+
+
+
+            // increment
+            t = (t+1) % theGame.players.length;
+        }
+
+        return hasLearned;
+
+    }
+
+    function assertFact(player,card){
+        var val = theGame.players[player][card];
+        if (val === -2){
+            theGame.players[player][card] = undefined;
+
+        }else if (val === 2){
+            theGame.players[player][card] = -2;
+        }else {
+            theGame.players[player][card] = 2;
+        }
+        calculateTable();
+
+        
+    }
+
+
+    function calculateTable(){
+        
+        for (var p in theGame.players){
+            var player = theGame.players[p]
+            for (var c in player){
+                if ((player[c] !== 2) && (player[c] !== -2)){
+                    player[c] = undefined;
+                }
+            }
+        }
+        
+        for (var p = 0; p < theGame.players.length; p++){
+            var player = theGame.players[p]
+            for (var c in player){
+                if (player[c] === 2){
+                    falseOthers(c);
+                }  
+            }    
+        }
+    
+        hasLearned = true;
+        while (hasLearned){
+            hasLearned = false;
+            for (p in theGame.events){
+                var e = theGame.events[p];
+                hasLearned = calculateEvent(e) || hasLearned;
+            }
+
+        }
+
+        drawTable();
+
+    }
+
+    function falseOthers(card){
+        for (var i = 0; i < theGame.players.length; i++){
+            pl = theGame.players[i];
+            if (pl[card] === undefined){
+                pl[card] = -1;
+            }
+        }
+    }
+    function drawTable(){
+        var tab = document.createElement("table");
+        for (var ct in bcards){
+            var tr = document.createElement("tr");
+            var th = document.createElement("th");
+            th.innerHTML = ct;
+            tr.appendChild(th);
+            tab.appendChild(tr);
+            for (var c in bcards[ct]){
+                tr = document.createElement("tr");
+                var td = document.createElement("td");
+                var cardName = bcards[ct][c];
+                td.innerHTML = cardName;
+                tab.appendChild(tr);
+                tr.appendChild(td);
+                for (var i = 0; i < theGame.players.length; i ++){
+                    var aRef = document.createElement("a");
+                    aRef.setAttribute("href","javascript:assertFact(" +i+ ", '" + cardName +"')" );
+
+                    var td  = document.createElement("td");
+                    var val = theGame.players[i][cardName];
+                    if (val > 0){
+                        td.innerHTML = "T";
+                        if (val === 2)
+                            td.style.background = "#aaffaa";
+                    }else if (val < 0) {
+                        td.innerHTML = "F";
+                        if (val === -2)
+                            td.style.background = "#ffaaaa";
+                    }else {
+                        td.innerHTML = "_";
+                    }
+                    tr.appendChild(aRef);
+                    aRef.appendChild(td);
+                    
+                    
+                    
+                }
+                
+            } 
+ 
+        }
+        
+        var tabDiv = document.getElementById("res_table")
+        while (tabDiv.hasChildNodes()){
+            tabDiv.removeChild(tabDiv.lastChild);
+        }
+        tabDiv.appendChild(tab);
+
+
+    
+    }
+
+</script>
+</html>
+
+<!--TODO
+
+Fact add system. Change to buttons on table
+
+Count cards
+
+-->
