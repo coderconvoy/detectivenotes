@@ -44,21 +44,34 @@
 
         <div id="dialog_1" class="hidden">
             Player names: (In order around the table) <br>
-            <textarea id="txt_playerNames" rows="6" cols="15"></textarea>
+            <textarea id="txt_playerNames" rows="6" cols="20"></textarea><br>
+            Cards, divided by type:<br>
+            <textarea id="txt_cardNames" rows="12" cols="20">
+            </textarea><br>
             <button onclick="newGame()">Begin</button>
         </div>
     </body>
 
 <script>
 
-    bcardTypes = ["people"," with the ","weapons"," in the ","rooms",". Who Responds?"];
-    bcards = {
+    bCardTypes = ["people"," with the ","weapons"," in the ","rooms",". Who Responds?"];
+    bCards = {
         people : ["Scarlet","White","Mustard","Green","Plum","Peacock"],
         weapons : ["Rope", "Dagger", "Lead Pipe","Candlestick","Revolver","Spanner"],
         rooms : ["Ball Room", "Hall", "Study","lounge","kitchen","Conservatory","Library","Billiard Room", "Dining Room"]
     }
 
     theGame = null;
+
+    function mergeStringArrays(a1,a2){
+        var res = [];
+        var minLen = Math.min(a1.length,a2.length);
+        for (var i = 0; i < minLen; i++){
+            res.push(a1[i] + " (" + a2[i]+ ")");
+        }
+        return res;
+        
+    }
 
 
     function makeOptions(message,options,values){
@@ -86,35 +99,35 @@
                 asker: parseInt(optionName),
                 askCards: []
             }
-            makeOptions("Player " + optionName + " suspects :",bcards[bcardTypes[0]]);
+            makeOptions(theGame.names[optionName]+" suspects :",bCards[bCardTypes[0]]);
             return;
         }
 
-        var bLen = bcardTypes.length /2;
+        var bLen = bCardTypes.length /2;
         var comp = theGame.composing;
         if (comp.askCards.length === bLen){
             comp.responder = optionName;
             theGame.events.push(comp);
             theGame.composing = null;
-            makeOptions("Who Suspects something?",theGame.names,theGame.playas);
+            makeOptions("Who Suspects something?",mergeStringArrays(theGame.names,theGame.cardCounts),theGame.playas);
             calculateTable();
             return;
         }
-        var message = "Player " + comp.asker + " suspects ";
+        var message = theGame.names[comp.asker]+ " suspects ";
         
         comp.askCards.push(optionName);
         for (var i = 0; i < comp.askCards.length; i++){
             message += comp.askCards[i];
-            message += bcardTypes[(i * 2)+ 1];
+            message += bCardTypes[(i * 2)+ 1];
         }
         if (comp.askCards.length >=bLen){
             console.log("Last Option");
-            makeOptions(message,theGame.names,theGame.playas);
+            makeOptions(message,mergeStringArrays(theGame.names,theGame.cardCounts),theGame.playas);
             return;
         }
-        console.log("Not Last: " + comp.askCards.length + "," + bcards.length);
+        console.log("Not Last: " + comp.askCards.length + "," + bCards.length);
         var l = comp.askCards.length;
-        makeOptions(message,bcards[bcardTypes[l * 2]]);
+        makeOptions(message,bCards[bCardTypes[l * 2]]);
 
     }
 
@@ -130,15 +143,60 @@
         return sel;
     }
 
+    //Returns first the object list of cards then the array of types and joins
+    function makeCardList(s){
+        var lines = s.split("\n");
+        var resBC = {};
+        var resCT = [];
+        
+        var curr = [];
+
+        for (var i = 0 ; i < lines.length; i++){
+            var l = lines[i];
+            if (l !== ""){
+                if( l[0] === '-' ){
+                    curr.push( l.substring(1));
+                }else {
+                    var ar = l.split(":"); 
+                    curr = [];
+                    resBC[ar[ar.length -1]] = curr;
+                    for (var j = 0; j < ar.length; j++){
+                        if (ar[j].trim() != "")
+                            resCT.push(ar[j]);
+}
+                }
+            }
+        }
+        return [resBC,resCT]; 
+        
+    }
+    
+
     function newGameDialog(){
         var dialog = document.getElementById("dialog_1");
         dialog.removeAttribute("class");
 
 
         var pNames = document.getElementById("txt_playerNames");
-        pNames.value = "P1\nP2\np3";
-        if (theGame !== undefined)
+        pNames.value = "*P1\nP2\np3";
+        if (theGame !== null)
             pNames.value = theGame.names.join("\n");
+        
+        var cNames = document.getElementById("txt_cardNames");
+        // Add lines first for the bCardTypes then loop all within their type and add a line each
+        var lines = "";
+        for (i = 0; i < bCardTypes.length; i +=2){
+            lines += bCardTypes[i]+ "\n";
+            var cGroup = bCards[bCardTypes[i]];
+            for (j = 0; j < cGroup.length; j++){
+                lines += "-" + cGroup[j] + "\n";
+            } + ":" +  bCardTypes[i+1] + "\n"; 
+            lines += bCardTypes[i+1] + ":"; 
+
+
+        }  
+        cNames.value = lines;
+
     }
 
     function newGame(){
@@ -150,16 +208,47 @@
         theGame.names = pList.value.split('\n');
         nPlayers = theGame.names.length;
 
+        var dFirst = 0;
 
-        for (i = 0; i < nPlayers; i++){
+        var cc = []
+
+
+        for (var i = 0; i < nPlayers; i++){
+            if (theGame.names[i][0] == '*') {
+                dFirst = i;
+                theGame.names[i]= theGame.names[i].substring(1);
+            }
+            
             theGame.players[i] = [];
             theGame.playas[i] = i;
 
+            cc.push(0);
         }
-        //Maker Area
-        makeOptions("Who suspect's something?",theGame.names,theGame.playas);
+
+
+        console.log("dFirst: " + dFirst);
         
 
+        cList = document.getElementById("txt_cardNames"); 
+        var bCardSet = makeCardList(cList.value);
+
+        bCards = bCardSet[0];
+        bCardTypes = bCardSet[1];
+
+        console.log(bCards);
+        nCards = 0;
+        for (i in bCards) {
+            nCards += bCards[i].length;
+        } 
+        console.log("NCards :" + nCards);
+        for (i = 0; i < nCards -3; i++){
+            cc[ (dFirst + i)% cc.length] ++; 
+            console.log(i);
+        }
+        theGame.cardCounts = cc;
+
+        //Maker Area
+        makeOptions("Who suspect's something?",mergeStringArrays(theGame.names,theGame.cardCounts),theGame.playas);
 
         drawTable();
 
@@ -227,6 +316,22 @@
     }
 
 
+    //Falsify all remaining cards for a player,
+    //If it sets any cards return true else false
+    function falsifyPlayerRemaining(player){
+        res = false;
+        for (p in bCards){
+            for( var i = 0; i < bCards[p].length; i++){
+                var cName = bCards[p][i];
+                if (player[cName] === undefined ){
+                    res = true;
+                    player[cName] = -1;
+                }
+            }
+        }
+        
+    }
+
     function calculateTable(){
         
         for (var p in theGame.players){
@@ -255,6 +360,22 @@
                 hasLearned = calculateEvent(e) || hasLearned;
             }
 
+            for ( i = 0; i < theGame.players.length; i++) {
+                var cp = theGame.players[i];
+                var trues = 0;
+                for (c in cp){
+                    if (cp[c] > 0) {
+                        trues ++;
+                    }
+                }
+
+                if (trues >= theGame.cardCounts[i]){
+                    hasLearned = falsifyPlayerRemaining(cp) || hasLearned;
+                    
+                }
+                
+            }
+
         }
 
         drawTable();
@@ -271,16 +392,16 @@
     }
     function drawTable(){
         var tab = document.createElement("table");
-        for (var ct in bcards){
+        for (var ct in bCards){
             var tr = document.createElement("tr");
             var th = document.createElement("th");
             th.innerHTML = ct;
             tr.appendChild(th);
             tab.appendChild(tr);
-            for (var c in bcards[ct]){
+            for (var c in bCards[ct]){
                 tr = document.createElement("tr");
                 var td = document.createElement("td");
-                var cardName = bcards[ct][c];
+                var cardName = bCards[ct][c];
                 td.innerHTML = cardName;
                 tab.appendChild(tr);
                 tr.appendChild(td);
