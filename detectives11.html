@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {
+                font-size : 150%;
+            }
+            div {
+                border:1px solid black;
+                margin :2px;
+            }
+            button, select{
+                height:50px;
+                font-size : 120%;
+            }
+            #dialog_1 {
+                position:fixed;
+                top:20px;
+                bottom:20px;
+                left:20px;
+                right:20px;
+                background:white;
+            }
+            .hidden {
+                display:none;
+            }
+            
+        </style>
+
+    </head>
+    <body>
+        <h1>Detective Notes</h1>
+        <div class="wrap">
+            <button onclick="newGameDialog()">New Game</button>
+            <button onclick="piorotMode()">Piorot Mode</button>
+        </div>
+        <div class="wrap" id="div_eventMaker">
+        </div>
+
+        <div id="res_table">
+
+        </div>
+
+        <div id="dialog_1" class="hidden">
+            Player names: (In order around the table) <br>
+            <textarea id="txt_playerNames" rows="6" cols="20"></textarea><br>
+            Cards, divided by type:<br>
+            <textarea id="txt_cardNames" rows="12" cols="20">
+            </textarea><br>
+            <button onclick="newGame()">Begin</button>
+        </div>
+    </body>
+
+<script>
+
+    bCardTypes = ["people"," with the ","weapons"," in the ","rooms",". Who Responds?"];
+    bCards = {
+        people : ["Scarlet","White","Mustard","Green","Plum","Peacock"],
+        weapons : ["Rope", "Dagger", "Lead Pipe","Candlestick","Revolver","Spanner"],
+        rooms : ["Ball Room", "Hall", "Study","lounge","kitchen","Conservatory","Library","Billiard Room", "Dining Room"]
+    }
+
+    theGame = null;
+
+    function mergeStringArrays(a1,a2){
+        var res = [];
+        var minLen = Math.min(a1.length,a2.length);
+        for (var i = 0; i < minLen; i++){
+            res.push(a1[i] + " (" + a2[i]+ ")");
+        }
+        return res;
+        
+    }
+
+    function arContains(ar,s){
+        for (p in ar)
+            if (ar[p] === s ) return true;
+        return false;
+    }
+
+
+    function makeOptions(message,options,values){
+        if (values === undefined) values = options;
+
+        mkArea = document.getElementById("div_eventMaker");
+    
+
+        mkArea.innerHTML = "<b>" + message + "</b><br>\n";
+        for (var i = 0; i < options.length; i++){
+            var butt = document.createElement("button");
+            butt.innerHTML = options[i];
+            butt.setAttribute("onclick","cardSelect('" + values[i] + "')");
+            mkArea.appendChild(butt);
+        }
+        
+    }
+
+    isPiorotMode = false;
+    function piorotMode(){
+        isPiorotMode = ! isPiorotMode;
+        var tab = document.getElementById("res_table");
+        if (isPiorotMode){
+            tab.style.display = "none";
+            return;
+        }
+        tab.style.display = "";
+    }
+    
+    function cardSelect(optionName){
+        console.log("cardSelect : " + optionName);
+        
+        if( theGame.composing === null){
+            theGame.composing = {
+                asker: parseInt(optionName),
+                askCards: []
+            }
+            makeOptions(theGame.names[optionName]+" suspects :",bCards[bCardTypes[0]]);
+            return;
+        }
+
+        var bLen = bCardTypes.length /2;
+        var comp = theGame.composing;
+        if (comp.askCards.length === bLen){
+            comp.responder = optionName;
+            theGame.events.push(comp);
+            theGame.composing = null;
+            makeOptions("Who Suspects something?",mergeStringArrays(theGame.names,theGame.cardCounts),theGame.playas);
+            calculateTable();
+            return;
+        }
+        var message = theGame.names[comp.asker]+ " suspects ";
+        
+        comp.askCards.push(optionName);
+        for (var i = 0; i < comp.askCards.length; i++){
+            message += comp.askCards[i];
+            message += bCardTypes[(i * 2)+ 1];
+        }
+        if (comp.askCards.length >=bLen){
+            console.log("Last Option");
+            makeOptions(message,mergeStringArrays(theGame.names,theGame.cardCounts),theGame.playas);
+            return;
+        }
+        console.log("Not Last: " + comp.askCards.length + "," + bCards.length);
+        var l = comp.askCards.length;
+        makeOptions(message,bCards[bCardTypes[l * 2]]);
+
+    }
+
+    function makeSelect(id,values){
+        var sel = document.createElement("select");
+        sel.setAttribute("id",id);
+        for (var i = 0; i < values.length; i++){
+            var op = document.createElement("option");
+            op.innerHTML=values[i];
+            op.setAttribute("value",values[i]);
+            sel.appendChild(op);
+        }
+        return sel;
+    }
+
+    //Returns first the object list of cards then the array of types and joins
+    function makeCardList(s){
+        var lines = s.split("\n");
+        var resBC = {};
+        var resCT = [];
+        
+        var curr = [];
+
+        for (var i = 0 ; i < lines.length; i++){
+            var l = lines[i];
+            if (l.trim() !== ""){
+                if( l[0] === '-' ){
+                    curr.push( l.substring(1));
+                }else {
+                    var ar = l.split(":"); 
+                    curr = [];
+                    if (ar[ar.length -1].trim() !== "")
+                        resBC[ar[ar.length -1]] = curr;
+                    for (var j = 0; j < ar.length; j++){
+                        if (ar[j].trim() != "")
+                            resCT.push(ar[j]);
+}
+                }
+            }
+        }
+        return [resBC,resCT]; 
+        
+    }
+    
+
+    function newGameDialog(){
+        var dialog = document.getElementById("dialog_1");
+        dialog.removeAttribute("class");
+
+
+        var pNames = document.getElementById("txt_playerNames");
+        pNames.value = "*P1\nP2\np3";
+        if (theGame !== null)
+            pNames.value = theGame.names.join("\n");
+        
+        var cNames = document.getElementById("txt_cardNames");
+        // Add lines first for the bCardTypes then loop all within their type and add a line each
+        var lines = "";
+        for (i = 0; i < bCardTypes.length; i +=2){
+            lines += bCardTypes[i]+ "\n";
+            var cGroup = bCards[bCardTypes[i]];
+            for (j = 0; j < cGroup.length; j++){
+                lines += "-" + cGroup[j] + "\n";
+            } + ":" +  bCardTypes[i+1] + "\n"; 
+            lines += bCardTypes[i+1] + ":"; 
+
+
+        }  
+        cNames.value = lines;
+
+    }
+
+    function newGame(){
+        document.getElementById("dialog_1").setAttribute("class","hidden");
+
+        theGame = { events:[],facts:[],players:[],playas:[],composing : null};
+
+        pList = document.getElementById("txt_playerNames");
+        theGame.names = pList.value.split('\n');
+        nPlayers = theGame.names.length;
+
+        var dFirst = 0;
+
+        var cc = []
+
+
+        for (var i = 0; i < nPlayers; i++){
+            if (theGame.names[i][0] == '*') {
+                dFirst = i;
+                theGame.names[i]= theGame.names[i].substring(1);
+            }
+            
+            theGame.players[i] = [];
+            theGame.playas[i] = i;
+
+            cc.push(0);
+        }
+
+
+        console.log("dFirst: " + dFirst);
+        
+
+        cList = document.getElementById("txt_cardNames"); 
+        var bCardSet = makeCardList(cList.value);
+
+        bCards = bCardSet[0];
+        bCardTypes = bCardSet[1];
+
+        console.log(bCards);
+        nCards = 0;
+        for (i in bCards) {
+            nCards += bCards[i].length;
+        } 
+        console.log("NCards :" + nCards);
+        for (i = 0; i < nCards -3; i++){
+            cc[ (dFirst + i)% cc.length] ++; 
+        }
+        theGame.cardCounts = cc;
+
+        //Maker Area
+        makeOptions("Who suspect's something?",mergeStringArrays(theGame.names,theGame.cardCounts),theGame.playas);
+
+        drawTable();
+
+        
+    }
+    
+
+
+    function calculateEvent(ev){
+        var t = (ev.asker + 1) % theGame.players.length;
+        var hasLearned = false
+        while (t != ev.asker){
+            var cPlayer = theGame.players[t];
+            if (t == ev.responder){
+                var undef = -1;
+                for (var i = 0; i < ev.askCards.length; i++){
+                    var ac = ev.askCards[i];
+                    var cVal = cPlayer[ac];
+                    if (cVal > 0){
+                        return hasLearned;
+                    }
+                    if (cVal === undefined){
+                        if (undef != -1) return hasLearned;
+                        undef = ac;
+                    }
+                }
+                if (undef != -1){
+                    cPlayer[undef] = 1;  
+                    falseOthers(undef);
+                    return true;
+                }
+                return hasLearned;
+            }
+
+            //Non responder: set all to false;
+            for (p in ev.askCards)  {
+                c = ev.askCards[p];
+                if (cPlayer[c] === undefined)hasLearned = true;
+                cPlayer[c] = -1;
+            }
+
+
+
+            // increment
+            t = (t+1) % theGame.players.length;
+        }
+
+        return hasLearned;
+
+    }
+
+    function assertFact(player,card){
+        var val = theGame.players[player][card];
+        if (val === -2){
+            theGame.players[player][card] = undefined;
+
+        }else if (val === 2){
+            theGame.players[player][card] = -2;
+        }else {
+            theGame.players[player][card] = 2;
+        }
+        calculateTable();
+
+        
+    }
+
+
+    //Falsify all remaining cards for a player,
+    //If it sets any cards return true else false
+    function falsifyPlayerRemaining(player){
+        res = false;
+        for (p in bCards){
+            for( var i = 0; i < bCards[p].length; i++){
+                var cName = bCards[p][i];
+                if (player[cName] === undefined ){
+                    res = true;
+                    player[cName] = -1;
+                }
+            }
+        }
+        
+    }
+
+    function calculateTable(){
+        
+        for (var p in theGame.players){
+            var player = theGame.players[p]
+            for (var c in player){
+                if ((player[c] !== 2) && (player[c] !== -2)){
+                    player[c] = undefined;
+                }
+            }
+        }
+        
+        for (var p = 0; p < theGame.players.length; p++){
+            var player = theGame.players[p]
+            for (var c in player){
+                if (player[c] === 2){
+                    falseOthers(c);
+                }  
+            }    
+        }
+    
+        hasLearned = true;
+        while (hasLearned){
+            hasLearned = false;
+            for (p in theGame.events){
+                var e = theGame.events[p];
+                hasLearned = calculateEvent(e) || hasLearned;
+            }
+
+            for ( i = 0; i < theGame.players.length; i++) {
+                var cp = theGame.players[i];
+                var trues = 0;
+                for (c in cp){
+                    if (cp[c] > 0) {
+                        trues ++;
+                    }
+                }
+
+                if (trues >= theGame.cardCounts[i]){
+                    hasLearned = falsifyPlayerRemaining(cp) || hasLearned;
+                    
+                }
+                
+            }
+
+        }
+
+        var known = [];
+
+        //Check for any types where all but one cards are known
+        var knownC = function(cArray){
+
+            var unknownAt = false;
+            for(var i = 0; i < cArray.length; i++){
+                var cardName = cArray[i]; 
+                var tFound = false;
+                var nFFound = false;
+                for (j = 0; j < theGame.players.length; j++){
+                    var pc = theGame.players[j][cardName];
+                    if (pc >0 )
+                        tFound = true;
+                    if (pc > 0 || pc === undefined)
+                        nFFound = true;
+                }
+                if (! tFound){
+                    if (unknownAt !== false) {
+                        unknownAt = true;
+                    }else {
+                        unknownAt = cardName;
+                    }
+                }
+                if (! nFFound) {
+                    return cardName;
+                }
+            }
+            if (unknownAt === true) return false;
+            if (unknownAt === false) console.log("Too many trues in type");
+            return unknownAt;
+            
+        }
+
+        var solved = true;
+        console.log("New Solve");
+        for (p in bCards){
+            var res = knownC(bCards[p]);
+            if (res !== false){
+                console.log("solved = " + res +  ", p = " + p +".");
+                known.push(res);
+            }else {
+                solved = false;
+                console.log("solved = false, p = " + p);
+            }
+            
+        }
+        if (solved)
+            alert("I have solved it");
+        
+
+        theGame.known = known;
+        drawTable();
+
+    }
+
+    function falseOthers(card){
+        for (var i = 0; i < theGame.players.length; i++){
+            pl = theGame.players[i];
+            if (pl[card] === undefined){
+                pl[card] = -1;
+            }
+        }
+    }
+    function drawTable(){
+        var tab = document.createElement("table");
+        for (var ct in bCards){
+            var tr = document.createElement("tr");
+            var th = document.createElement("th");
+            th.innerHTML = ct;
+            tr.appendChild(th);
+            tab.appendChild(tr);
+            for (var c in bCards[ct]){
+                tr = document.createElement("tr");
+                var td = document.createElement("td");
+                var cardName = bCards[ct][c];
+                td.innerHTML = cardName;
+                if (arContains(theGame.known,cardName)){
+                    td.innerHTML = "<b>" + cardName + "</b>";
+                }
+                tab.appendChild(tr);
+                tr.appendChild(td);
+                for (var i = 0; i < theGame.players.length; i ++){
+                    var aRef = document.createElement("a");
+                    aRef.setAttribute("href","javascript:assertFact(" +i+ ", '" + cardName +"')" );
+
+                    var td  = document.createElement("td");
+                    var val = theGame.players[i][cardName];
+                    if (val > 0){
+                        td.innerHTML = "T";
+                        if (val === 2)
+                            td.style.background = "#aaffaa";
+                    }else if (val < 0) {
+                        td.innerHTML = "F";
+                        if (val === -2)
+                            td.style.background = "#ffaaaa";
+                    }else {
+                        td.innerHTML = "_";
+                    }
+                    tr.appendChild(aRef);
+                    aRef.appendChild(td);
+                    
+                    
+                    
+                }
+                
+            } 
+ 
+        }
+        
+        var tabDiv = document.getElementById("res_table")
+        while (tabDiv.hasChildNodes()){
+            tabDiv.removeChild(tabDiv.lastChild);
+        }
+        tabDiv.appendChild(tab);
+
+
+    
+    }
+
+</script>
+</html>
+
+<!--TODO
+
+Fact add system. Change to buttons on table
+
+Count cards
+
+-->
